@@ -5,12 +5,12 @@ A comprehensive full-stack application for tracking government payments to contr
 
 ## 🎯 Problem Statement
 
-**The Issue**: Ward offices approve payments, but contractors and employees wait for months before receiving payment. Nobody knows where the payment is stuck in the approval process.
+**The Issue**: Ward offices approve payments, but contractors and employees wait for months before receiving payment. Nobody knows where the payment is stuck in the approval process. Even if the payment happens or the project cancels somehow we don't know about it really well. If we know about it too we can just comment on the contractor in social media and within few months the contractor will handle another project. We have no authority to control this flow at all.
 
 **The Solution**: A transparent, trackable payment system with:
 - Real-time payment status tracking
 - Role-based dashboards (Government, Contractor, Citizen)
-- Daily work reports and plans
+- Daily work reports and plans(or weekly)
 - AI-powered contractor ratings
 - Citizen oversight with NID verification
 - Work longevity tracking
