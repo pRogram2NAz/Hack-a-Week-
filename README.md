@@ -73,8 +73,8 @@ A comprehensive full-stack application for tracking government payments to contr
 | Contract Size | Minimum Rating | Can Bid On |
 |---------------|----------------|------------|
 | Small | 3.8 | Small |
-| Medium | 3.8 | Small, Medium |
-| Large | 4.0 | Small, Medium, Large |
+| Medium | 4.0 | Small, Medium |
+| Large | 4.5| Small, Medium, Large |
 
 ### Forgiveness System
 **Natural Disasters** (Landslides, earthquakes, floods) can be forgiven:
