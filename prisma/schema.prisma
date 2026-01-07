@@ -1,4 +1,5 @@
 // Local Government Payment Delay Tracker - Database Schema
+// Updated with Central Government Features
 
 generator client {
   provider = "prisma-client-js"
@@ -9,11 +10,15 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// User roles: LOCAL_GOVERNMENT, CONTRACTOR, CITIZEN
+// User roles: LOCAL_GOVERNMENT, CONTRACTOR, CITIZEN, CENTRAL_GOV_PM, CENTRAL_GOV_FINANCE, CENTRAL_GOV_INFRASTRUCTURE
 enum UserRole {
   LOCAL_GOVERNMENT
   CONTRACTOR
   CITIZEN
+  CENTRAL_GOV_PM
+  CENTRAL_GOV_FINANCE
+  CENTRAL_GOV_INFRASTRUCTURE
+  PROVINCIAL_GOVERNMENT
 }
 
 // Contract status: PENDING, APPROVED, IN_PROGRESS, COMPLETED, CANCELLED
@@ -23,22 +28,27 @@ enum ContractStatus {
   IN_PROGRESS
   COMPLETED
   CANCELLED
+  DELAYED
+  SUSPENDED
 }
 
 // Payment request status: PENDING, UNDER_REVIEW, APPROVED, PAID, REJECTED
 enum PaymentStatus {
   PENDING
   UNDER_REVIEW
-  APPROVED
+  LOCAL_APPROVED
+  PROVINCIAL_APPROVED
+  CENTRAL_APPROVED
   PAID
   REJECTED
 }
 
-// Contract size: SMALL, MEDIUM, LARGE
+// Contract size: SMALL, MEDIUM, LARGE, NATIONAL
 enum ContractSize {
   SMALL
   MEDIUM
   LARGE
+  NATIONAL
 }
 
 // Contractor qualification status
@@ -71,6 +81,65 @@ enum ComplaintStatus {
   REJECTED
 }
 
+// Budget allocation status
+enum AllocationStatus {
+  PENDING
+  ALLOCATED
+  PARTIALLY_DISBURSED
+  FULLY_DISBURSED
+  RETURNED
+  CANCELLED
+}
+
+// Policy status
+enum PolicyStatus {
+  DRAFT
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  IMPLEMENTED
+  ARCHIVED
+}
+
+// Policy category
+enum PolicyCategory {
+  INFRASTRUCTURE
+  FINANCE
+  ENVIRONMENT
+  SAFETY
+  QUALITY
+  PROCUREMENT
+  GENERAL
+}
+
+// Project priority level
+enum PriorityLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+  NATIONAL_PRIORITY
+}
+
+// Recipient type for budget allocation
+enum RecipientType {
+  PROVINCE
+  LOCAL_UNIT
+  MINISTRY
+  DEPARTMENT
+  SPECIAL_PROJECT
+}
+
+// Audit status
+enum AuditStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FLAGGED
+  CLEARED
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -79,6 +148,18 @@ model User {
   nidNumber String?
   phone     String?
   address   String?
+  
+  // For government officials
+  designation String?
+  department  String?
+  ministry    String?
+  
+  // Province/Local unit association
+  provinceId  String?
+  province    Province? @relation(fields: [provinceId], references: [id])
+  localUnitId String?
+  localUnit   LocalUnit? @relation(fields: [localUnitId], references: [id])
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -98,9 +179,122 @@ model User {
   contractorRatings       CitizenRating[]          @relation("ContractorRatings")
   contractorIssues        IssueReport[]            @relation("ContractorIssueReports")
   complaints              Complaint[]
+  
+  // Central Government Relations
+  budgetAllocations       BudgetAllocation[]       @relation("AllocatedBy")
+  receivedAllocations     BudgetAllocation[]       @relation("ReceivedBy")
+  policyProposals         PolicyDecision[]         @relation("ProposedBy")
+  policyDecisions         PolicyDecision[]         @relation("DecidedBy")
+  qualityInspections      QualityInspection[]      @relation("InspectedBy")
+  auditsConducted         AuditRecord[]            @relation("AuditedBy")
+  centralPaymentApprovals CentralPaymentApproval[] @relation("ApprovedBy")
+  nationalProjects        NationalProject[]        @relation("ProjectManager")
+  notifications           Notification[]
 
   @@index([role])
   @@index([email])
+  @@index([provinceId])
+  @@index([localUnitId])
+}
+
+// Province Model - For Nepal's 7 provinces
+model Province {
+  id   String @id @default(cuid())
+  name String @unique
+  code String @unique // e.g., "P1", "P2", etc.
+  
+  // Province details
+  capital      String?
+  area         Float? // in sq km
+  population   Int?
+  headquarters String?
+  
+  // Budget information
+  allocatedBudget Float @default(0)
+  spentBudget     Float @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  localUnits         LocalUnit[]
+  users              User[]
+  contracts          Contract[]
+  budgetAllocations  BudgetAllocation[]
+  nationalProjects   NationalProject[]
+  provincialStats    ProvincialStats?
+
+  @@index([code])
+}
+
+// Local Unit Model - Municipalities, Rural Municipalities, Metropolitan Cities
+model LocalUnit {
+  id         String   @id @default(cuid())
+  name       String
+  type       String   // METROPOLITAN, SUB_METROPOLITAN, MUNICIPALITY, RURAL_MUNICIPALITY
+  provinceId String
+  province   Province @relation(fields: [provinceId], references: [id])
+  
+  // Local unit details
+  wards      Int      @default(0)
+  area       Float?   // in sq km
+  population Int?
+  
+  // Budget information
+  allocatedBudget Float @default(0)
+  spentBudget     Float @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  users             User[]
+  contracts         Contract[]
+  budgetAllocations BudgetAllocation[]
+  nationalProjects  NationalProject[]
+
+  @@unique([name, provinceId])
+  @@index([provinceId])
+  @@index([type])
+}
+
+// Provincial Statistics - Aggregated stats for each province
+model ProvincialStats {
+  id         String   @id @default(cuid())
+  provinceId String   @unique
+  province   Province @relation(fields: [provinceId], references: [id])
+  
+  // Project statistics
+  totalProjects     Int @default(0)
+  completedProjects Int @default(0)
+  ongoingProjects   Int @default(0)
+  delayedProjects   Int @default(0)
+  cancelledProjects Int @default(0)
+  
+  // Budget statistics
+  totalBudget     Float @default(0)
+  allocatedBudget Float @default(0)
+  spentBudget     Float @default(0)
+  pendingPayments Float @default(0)
+  
+  // Contractor statistics
+  activeContractors   Int   @default(0)
+  totalContractors    Int   @default(0)
+  avgContractorRating Float @default(0)
+  
+  // Performance metrics
+  completionRate      Float @default(0) // Percentage
+  budgetUtilization   Float @default(0) // Percentage
+  avgProjectDuration  Float @default(0) // Days
+  citizenSatisfaction Float @default(0) // 1-5 scale
+  
+  // Fiscal year
+  fiscalYear String
+  
+  lastUpdated DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([fiscalYear])
 }
 
 model ContractorQualification {
@@ -109,31 +303,39 @@ model ContractorQualification {
   contractor   User   @relation(fields: [contractorId], references: [id])
 
   // Certificate information
-  certificateUrl    String? // URL of uploaded certificate
+  certificateUrl    String?
   certificateNumber String?
   issuedDate        DateTime?
   expiryDate        DateTime?
   issuingAuthority  String?
 
   // Skills and experience
-  skills            String? // JSON array of skills
+  skills            String?
   experienceYears   Int     @default(0)
-  experienceDetails String? // Details of previous work
+  experienceDetails String?
+  
+  // Allowed project sizes based on qualification
+  allowedProjectSizes String? // JSON array: ["SMALL", "MEDIUM", "LARGE", "NATIONAL"]
 
   // Test/Assessment results
   testTaken  Boolean   @default(false)
   testDate   DateTime?
-  testScore  Float? // 0-100 scale
-  testResult String? // Detailed test results
+  testScore  Float?
+  testResult String?
 
   // Initial rating calculation
-  initialRating Float? // Calculated from certificate, skills, experience, or test
+  initialRating Float?
 
   // Qualification status
   status          QualificationStatus @default(PENDING)
-  reviewedBy      String? // Government official who reviewed
+  reviewedBy      String?
   reviewedAt      DateTime?
   rejectionReason String?
+  
+  // Central government verification
+  centralVerified   Boolean   @default(false)
+  centralVerifiedBy String?
+  centralVerifiedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -152,8 +354,16 @@ model Contract {
   status      ContractStatus @default(PENDING)
   size        ContractSize   @default(MEDIUM)
   location    String?
+  
+  // Priority level
+  priority PriorityLevel @default(MEDIUM)
+  
+  // Is this a national priority project?
+  isNationalPriority Boolean @default(false)
+  nationalProjectId  String?
+  nationalProject    NationalProject? @relation(fields: [nationalProjectId], references: [id])
 
-  // Work longevity requirement (e.g., road must last 10 years)
+  // Work longevity requirement
   expectedLifespanYears Int       @default(10)
   actualLifespanStart   DateTime?
   actualLifespanEnd     DateTime?
@@ -166,25 +376,105 @@ model Contract {
   contractorId String?
   contractor   User?   @relation("ContractorContracts", fields: [contractorId], references: [id])
 
+  // Province and Local Unit
+  provinceId  String?
+  province    Province?  @relation(fields: [provinceId], references: [id])
+  localUnitId String?
+  localUnit   LocalUnit? @relation(fields: [localUnitId], references: [id])
+
   // Assignment tracking
   assignedAt DateTime?
   assignedBy String?
+  
+  // Progress tracking
+  progressPercentage Float @default(0)
+  lastProgressUpdate DateTime?
+  
+  // Spending tracking
+  spentAmount Float @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  paymentRequests  PaymentRequest[]
-  dailyPlans       DailyPlan[]
-  workReports      WorkReport[]
-  citizenRatings   CitizenRating[]
-  issueReports     IssueReport[]
-  complaints       Complaint[]
-  projectLocations ProjectLocation[]
+  paymentRequests    PaymentRequest[]
+  dailyPlans         DailyPlan[]
+  workReports        WorkReport[]
+  citizenRatings     CitizenRating[]
+  issueReports       IssueReport[]
+  complaints         Complaint[]
+  projectLocations   ProjectLocation[]
+  qualityInspections QualityInspection[]
+  auditRecords       AuditRecord[]
 
   @@index([governmentId])
   @@index([contractorId])
   @@index([status])
+  @@index([provinceId])
+  @@index([localUnitId])
+  @@index([priority])
+  @@index([isNationalPriority])
+}
+
+// National Project - Large scale projects managed by Central Government
+model NationalProject {
+  id          String @id @default(cuid())
+  title       String
+  description String
+  
+  // Budget
+  totalBudget     Float
+  allocatedBudget Float @default(0)
+  spentBudget     Float @default(0)
+  
+  // Timeline
+  startDate         DateTime
+  expectedEndDate   DateTime
+  actualEndDate     DateTime?
+  
+  // Status and priority
+  status   ContractStatus @default(PENDING)
+  priority PriorityLevel  @default(HIGH)
+  
+  // Scope
+  provinceIds   String? // JSON array of province IDs involved
+  localUnitIds  String? // JSON array of local unit IDs involved
+  
+  // Single province/local unit for simpler queries
+  primaryProvinceId  String?
+  primaryProvince    Province?  @relation(fields: [primaryProvinceId], references: [id])
+  primaryLocalUnitId String?
+  primaryLocalUnit   LocalUnit? @relation(fields: [primaryLocalUnitId], references: [id])
+  
+  // Project manager from Central Government
+  projectManagerId String?
+  projectManager   User?   @relation("ProjectManager", fields: [projectManagerId], references: [id])
+  
+  // Ministry responsible
+  responsibleMinistry String?
+  
+  // Progress
+  progressPercentage Float @default(0)
+  milestones         String? // JSON array of milestones
+  
+  // Impact assessment
+  expectedBeneficiaries Int?
+  actualBeneficiaries   Int?
+  impactDescription     String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  contracts          Contract[]
+  budgetAllocations  BudgetAllocation[]
+  qualityInspections QualityInspection[]
+  auditRecords       AuditRecord[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([primaryProvinceId])
+  @@index([responsibleMinistry])
 }
 
 model ProjectLocation {
@@ -203,17 +493,17 @@ model ProjectLocation {
 }
 
 model Complaint {
-  id           String          @id @default(cuid())
+  id           String   @id @default(cuid())
   contractorId String
-  contractor   User            @relation(fields: [contractorId], references: [id])
+  contractor   User     @relation(fields: [contractorId], references: [id])
   contractId   String?
-  contract     Contract?       @relation(fields: [contractId], references: [id])
+  contract     Contract? @relation(fields: [contractId], references: [id])
 
   // Complaint details
-  text              String
-  sentimentScore    Float // -1 to +1
-  complaintType     String // QUALITY_ISSUE, SAFETY_CONCERN, etc.
-  confidence        Float // Classification confidence 0-1
+  text           String
+  sentimentScore Float
+  complaintType  String
+  confidence     Float
 
   // Image and GPS data
   imageUrl          String?
@@ -233,6 +523,13 @@ model Complaint {
 
   // Status/Flag
   status ComplaintStatus @default(PENDING_REVIEW)
+  
+  // Escalation to central government
+  escalatedToCentral Boolean   @default(false)
+  escalatedAt        DateTime?
+  escalationReason   String?
+  centralReviewedBy  String?
+  centralReviewedAt  DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -241,6 +538,7 @@ model Complaint {
   @@index([contractId])
   @@index([status])
   @@index([createdAt])
+  @@index([escalatedToCentral])
 }
 
 model PaymentRequest {
@@ -253,28 +551,378 @@ model PaymentRequest {
 
   amount     Float
   reason     String
-  workPeriod String // e.g., "Jan 1-15, 2025"
+  workPeriod String
 
   status          PaymentStatus @default(PENDING)
+  
+  // Multi-level approval
+  localApprovedBy     String?
+  localApprovedAt     DateTime?
+  provincialApprovedBy String?
+  provincialApprovedAt DateTime?
+  centralApprovedBy   String?
+  centralApprovedAt   DateTime?
+  
+  // Legacy fields for backward compatibility
   approvedBy      String?
   approvedAt      DateTime?
   rejectedAt      DateTime?
   rejectionReason String?
+  
+  // Rejection tracking at each level
+  rejectedBy       String?
+  rejectedLevel    String? // LOCAL, PROVINCIAL, CENTRAL
 
-  // Material details for pricing transparency
-  materials     String? // JSON array of materials with prices
-  materialProof String? // URL of material receipts/evidence
+  // Material details
+  materials     String?
+  materialProof String?
 
-  // Blockchain integration (for future)
+  // Blockchain integration
   blockchainTxHash String?
   walletAddress    String?
+  
+  // Central government tracking
+  requiresCentralApproval Boolean @default(false)
+  centralApprovalThreshold Float? // Amount threshold that requires central approval
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Relations
+  centralPaymentApprovals CentralPaymentApproval[]
+
   @@index([contractId])
   @@index([requesterId])
   @@index([status])
+  @@index([requiresCentralApproval])
+}
+
+// Central Payment Approval - For high-value payments requiring central approval
+model CentralPaymentApproval {
+  id               String         @id @default(cuid())
+  paymentRequestId String
+  paymentRequest   PaymentRequest @relation(fields: [paymentRequestId], references: [id])
+  
+  // Approver details
+  approvedById String
+  approvedBy   User   @relation("ApprovedBy", fields: [approvedById], references: [id])
+  
+  // Approval details
+  approved     Boolean
+  comments     String?
+  approvedAt   DateTime @default(now())
+  
+  // Ministry that approved
+  ministry String?
+  
+  createdAt DateTime @default(now())
+
+  @@index([paymentRequestId])
+  @@index([approvedById])
+}
+
+// Budget Allocation - Central to Provincial/Local
+model BudgetAllocation {
+  id String @id @default(cuid())
+  
+  // Allocator (Central Government)
+  allocatedById String
+  allocatedBy   User   @relation("AllocatedBy", fields: [allocatedById], references: [id])
+  
+  // Recipient
+  recipientType RecipientType
+  recipientId   String? // User ID if applicable
+  recipient     User?   @relation("ReceivedBy", fields: [recipientId], references: [id])
+  
+  // Province or Local Unit recipient
+  provinceId  String?
+  province    Province?  @relation(fields: [provinceId], references: [id])
+  localUnitId String?
+  localUnit   LocalUnit? @relation(fields: [localUnitId], references: [id])
+  
+  // For national projects
+  nationalProjectId String?
+  nationalProject   NationalProject? @relation(fields: [nationalProjectId], references: [id])
+  
+  // Allocation details
+  recipientName String
+  amount        Float
+  purpose       String
+  description   String?
+  
+  // Fiscal year
+  fiscalYear String
+  
+  // Status
+  status AllocationStatus @default(PENDING)
+  
+  // Disbursement tracking
+  disbursedAmount   Float     @default(0)
+  lastDisbursedAt   DateTime?
+  disbursementCount Int       @default(0)
+  
+  // Conditions
+  conditions String? // JSON array of conditions for release
+  
+  // Approval chain
+  approvedByFinance     Boolean   @default(false)
+  financeApprovedAt     DateTime?
+  approvedByPM          Boolean   @default(false)
+  pmApprovedAt          DateTime?
+  
+  allocatedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([allocatedById])
+  @@index([recipientType])
+  @@index([provinceId])
+  @@index([localUnitId])
+  @@index([fiscalYear])
+  @@index([status])
+}
+
+// Policy Decision - Central Government Policies
+model PolicyDecision {
+  id          String @id @default(cuid())
+  title       String
+  description String
+  
+  // Category and scope
+  category PolicyCategory
+  scope    String? // NATIONAL, PROVINCIAL, LOCAL
+  
+  // Affected entities
+  affectedProvinces  String? // JSON array of province IDs
+  affectedLocalUnits String? // JSON array of local unit IDs
+  affectedMinistries String? // JSON array of ministry names
+  
+  // Impact assessment
+  impact              String?
+  expectedOutcome     String?
+  budgetImplication   Float?
+  implementationCost  Float?
+  
+  // Proposer
+  proposedById String
+  proposedBy   User   @relation("ProposedBy", fields: [proposedById], references: [id])
+  proposerMinistry String?
+  
+  proposedAt DateTime @default(now())
+  
+  // Status
+  status PolicyStatus @default(DRAFT)
+  
+  // Decision maker (PM)
+  decidedById String?
+  decidedBy   User?    @relation("DecidedBy", fields: [decidedById], references: [id])
+  decidedAt   DateTime?
+  
+  // Decision details
+  decisionComments  String?
+  rejectionReason   String?
+  
+  // Implementation
+  implementationDate   DateTime?
+  implementationStatus String? // NOT_STARTED, IN_PROGRESS, COMPLETED
+  implementationNotes  String?
+  
+  // Document attachments
+  documentUrls String? // JSON array of document URLs
+  
+  // Effective period
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([status])
+  @@index([proposedById])
+  @@index([decidedById])
+}
+
+// Quality Inspection - Infrastructure quality monitoring
+model QualityInspection {
+  id String @id @default(cuid())
+  
+  // What is being inspected
+  contractId        String?
+  contract          Contract?        @relation(fields: [contractId], references: [id])
+  nationalProjectId String?
+  nationalProject   NationalProject? @relation(fields: [nationalProjectId], references: [id])
+  
+  // Inspector
+  inspectedById String
+  inspectedBy   User   @relation("InspectedBy", fields: [inspectedById], references: [id])
+  inspectorMinistry String?
+  
+  // Inspection details
+  inspectionDate DateTime
+  inspectionType String // ROUTINE, COMPLAINT_BASED, MILESTONE, FINAL
+  
+  // Findings
+  overallScore     Float? // 0-100
+  qualityScore     Float? // 0-100
+  safetyScore      Float? // 0-100
+  complianceScore  Float? // 0-100
+  
+  findings         String? // Detailed findings
+  issues           String? // JSON array of issues found
+  recommendations  String? // JSON array of recommendations
+  
+  // Evidence
+  photoUrls   String? // JSON array of photo URLs
+  documentUrl String? // Inspection report document
+  
+  // Status
+  status    String // PASSED, FAILED, NEEDS_IMPROVEMENT, PENDING_REVIEW
+  
+  // Follow-up
+  followUpRequired Boolean   @default(false)
+  followUpDate     DateTime?
+  followUpNotes    String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contractId])
+  @@index([nationalProjectId])
+  @@index([inspectedById])
+  @@index([status])
+  @@index([inspectionDate])
+}
+
+// Audit Record - Financial and project audits
+model AuditRecord {
+  id String @id @default(cuid())
+  
+  // What is being audited
+  entityType String // CONTRACT, NATIONAL_PROJECT, BUDGET_ALLOCATION, PAYMENT
+  entityId   String
+  
+  // Optional direct relations
+  contractId        String?
+  contract          Contract?        @relation(fields: [contractId], references: [id])
+  nationalProjectId String?
+  nationalProject   NationalProject? @relation(fields: [nationalProjectId], references: [id])
+  
+  // Auditor
+  auditedById String
+  auditedBy   User   @relation("AuditedBy", fields: [auditedById], references: [id])
+  auditorMinistry String?
+  
+  // Audit details
+  auditType   String // FINANCIAL, COMPLIANCE, PERFORMANCE, SPECIAL
+  auditPeriod String // e.g., "Q1 2080/81"
+  
+  startDate DateTime
+  endDate   DateTime?
+  
+  // Findings
+  status          AuditStatus @default(PENDING)
+  findings        String?
+  discrepancies   String? // JSON array of discrepancies
+  amountInQuestion Float?
+  
+  // Risk assessment
+  riskLevel String? // LOW, MEDIUM, HIGH, CRITICAL
+  
+  // Recommendations
+  recommendations String? // JSON array
+  actionRequired  Boolean @default(false)
+  actionDeadline  DateTime?
+  
+  // Resolution
+  resolved       Boolean   @default(false)
+  resolvedAt     DateTime?
+  resolutionNote String?
+  
+  // Documents
+  reportUrl String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([entityType])
+  @@index([entityId])
+  @@index([contractId])
+  @@index([nationalProjectId])
+  @@index([status])
+  @@index([auditedById])
+}
+
+// National Budget - Fiscal year budget overview
+model NationalBudget {
+  id String @id @default(cuid())
+  
+  fiscalYear String @unique
+  
+  // Total amounts
+  totalBudget              Float
+  infrastructureBudget     Float
+  allocatedToProvinces     Float @default(0)
+  allocatedToLocalUnits    Float @default(0)
+  allocatedToNationalProjects Float @default(0)
+  
+  // Spending
+  totalSpent Float @default(0)
+  
+  // Breakdown by category
+  roadsAndHighways   Float @default(0)
+  buildings          Float @default(0)
+  waterSupply        Float @default(0)
+  electricity        Float @default(0)
+  irrigation         Float @default(0)
+  airports           Float @default(0)
+  otherInfrastructure Float @default(0)
+  
+  // Status
+  status String @default("DRAFT") // DRAFT, PROPOSED, APPROVED, ACTIVE, CLOSED
+  
+  // Approval
+  approvedAt  DateTime?
+  approvedBy  String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fiscalYear])
+  @@index([status])
+}
+
+// Notification - For all users
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  
+  title   String
+  message String
+  type    String // INFO, WARNING, ALERT, SUCCESS, ACTION_REQUIRED
+  
+  // Link to related entity
+  entityType String?
+  entityId   String?
+  actionUrl  String?
+  
+  // Status
+  read   Boolean   @default(false)
+  readAt DateTime?
+  
+  // Priority
+  priority String @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  
+  // Expiry
+  expiresAt DateTime?
+  
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([read])
+  @@index([type])
+  @@index([createdAt])
 }
 
 model DailyPlan {
@@ -286,17 +934,15 @@ model DailyPlan {
   contractor   User   @relation(fields: [contractorId], references: [id])
 
   planDate    DateTime
-  plannedWork String // Description of planned work
-  workers     Int      @default(0) // Number of workers planned
+  plannedWork String
+  workers     Int      @default(0)
 
-  // Detailed material tracking
-  materials      String? // JSON array of materials to be used
-  estimatedCosts String? // Estimated costs for materials
+  materials      String?
+  estimatedCosts String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
   workReports WorkReport[]
 
   @@index([contractId])
@@ -316,13 +962,12 @@ model WorkReport {
   dailyPlan   DailyPlan? @relation(fields: [dailyPlanId], references: [id])
 
   reportDate  DateTime
-  workSummary String // Detailed work summary
+  workSummary String
   hoursWorked Float
   workersUsed Int
-  progress    Float    @default(0) // Progress percentage
+  progress    Float    @default(0)
 
-  // Photo evidence
-  photos String? // JSON array of photo URLs
+  photos String?
 
   createdAt   DateTime @default(now())
   submittedAt DateTime @default(now())
@@ -343,24 +988,20 @@ model CitizenRating {
   citizenId String
   citizen   User   @relation("CitizenRatings", fields: [citizenId], references: [id])
 
-  rating  Float // 1-5 scale rating
-  comment String? // Citizen's comments
+  rating  Float
+  comment String?
 
-  // Rating category
-  qualityRating    Float? // 1-5 quality rating
-  durabilityRating Float? // 1-5 durability rating
-  timelinessRating Float? // 1-5 timeliness rating
+  qualityRating    Float?
+  durabilityRating Float?
+  timelinessRating Float?
 
-  // Work longevity tracking
   reportedDate            DateTime
-  issueDate               DateTime? // When the issue was noticed
-  timeSinceCompletionDays Int? // Days since work completion
+  issueDate               DateTime?
+  timeSinceCompletionDays Int?
 
-  // Proof for negative ratings
-  proofUrl         String? // URL of proof (photos, videos)
-  proofDescription String? // Description of the proof
+  proofUrl         String?
+  proofDescription String?
 
-  // Rating status
   status          RatingStatus @default(PENDING)
   reviewedBy      String?
   reviewedAt      DateTime?
@@ -389,19 +1030,15 @@ model IssueReport {
   title       String
   description String
 
-  // Issue category: Natural disaster or Contractor's fault
   category IssueCategory
 
-  // Specific issue details
   issueDate DateTime
-  issueType String // e.g., "Cracks", "Holes", "Drainage", "Landslide"
-  severity  String // LOW, MEDIUM, HIGH, CRITICAL
+  issueType String
+  severity  String
   location  String?
 
-  // Evidence
-  photos String? // JSON array of photo URLs
+  photos String?
 
-  // Forgiveness request
   isForgivenessRequest   Boolean   @default(false)
   forgivenessReason      String?
   forgivenessRequestedAt DateTime?
@@ -409,10 +1046,14 @@ model IssueReport {
   forgivenessApprovedBy  String?
   forgivenessApprovedAt  DateTime?
 
-  // Status
-  status     String    @default("PENDING") // PENDING, UNDER_REVIEW, APPROVED, REJECTED
+  status     String    @default("PENDING")
   reviewedBy String?
   reviewedAt DateTime?
+  
+  // Escalation to central government
+  escalatedToCentral Boolean   @default(false)
+  escalatedAt        DateTime?
+  escalationReason   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -422,6 +1063,7 @@ model IssueReport {
   @@index([citizenId])
   @@index([category])
   @@index([status])
+  @@index([escalatedToCentral])
 }
 
 model ContractorRating {
@@ -429,44 +1071,50 @@ model ContractorRating {
   contractorId String @unique
   contractor   User   @relation(fields: [contractorId], references: [id])
 
-  // Main rating (affected by AI complaint system)
-  rating Float @default(5.0) // Start from 5.0, affected by complaints
+  rating Float @default(5.0)
 
-  // Complaint statistics
   totalComplaints    Int @default(0)
   verifiedComplaints Int @default(0)
   rejectedComplaints Int @default(0)
   pendingComplaints  Int @default(0)
 
-  // Original rating metrics
-  overallRating    Float @default(0.0) // Start from 0, contractor must prove
-  planRating       Float @default(0.0) // Based on plan adherence
-  reportQuality    Float @default(0.0) // Based on report quality
-  paymentHistory   Float @default(0.0) // Based on payment requests
-  workerManagement Float @default(0.0) // Based on worker consistency
-  qualityOfWork    Float @default(0.0) // Based on citizen ratings
-  durabilityScore  Float @default(0.0) // Based on work longevity
+  overallRating    Float @default(0.0)
+  planRating       Float @default(0.0)
+  reportQuality    Float @default(0.0)
+  paymentHistory   Float @default(0.0)
+  workerManagement Float @default(0.0)
+  qualityOfWork    Float @default(0.0)
+  durabilityScore  Float @default(0.0)
 
-  // Rating history for smart point system
-  pointsGained     Float @default(0.0) // Total points gained
-  pointsLost       Float @default(0.0) // Total points lost
-  forgivenessCount Int   @default(0) // Number of times forgiven
+  pointsGained     Float @default(0.0)
+  pointsLost       Float @default(0.0)
+  forgivenessCount Int   @default(0)
 
-  // AI placeholder
-  aiAnalysis String? // AI analysis text (placeholder for user's AI)
+  aiAnalysis String?
 
   totalContracts     Int @default(0)
   activeContracts    Int @default(0)
   completedContracts Int @default(0)
 
-  // Minimum rating threshold
-  isBelowMinimum Boolean @default(false) // Below 3.8 threshold
+  isBelowMinimum Boolean @default(false)
+  
+  // Central government flags
+  flaggedByCentral Boolean   @default(false)
+  flagReason       String?
+  flaggedAt        DateTime?
+  
+  // Blacklist status
+  isBlacklisted Boolean   @default(false)
+  blacklistReason String?
+  blacklistedAt   DateTime?
+  blacklistedBy   String?
 
   lastUpdated DateTime @default(now())
   createdAt   DateTime @default(now())
 
   @@index([contractorId])
   @@index([rating])
+  @@index([isBlacklisted])
 }
 
 model ContractorProgress {
@@ -475,18 +1123,24 @@ model ContractorProgress {
   contractor   User   @relation(fields: [contractorId], references: [id])
 
   currentRating Float
-  canBidLarge   Boolean @default(false) // Requires rating >= 4.0
-  canBidMedium  Boolean @default(false) // Requires rating >= 3.8
-  canBidSmall   Boolean @default(true) // Always available for those >= 3.8
+  canBidLarge   Boolean @default(false)
+  canBidMedium  Boolean @default(false)
+  canBidSmall   Boolean @default(true)
+  canBidNational Boolean @default(false) // For national priority projects
 
   totalEarnings   Float @default(0)
   contractsWon    Int   @default(0)
   contractsActive Int   @default(0)
 
-  // Rating restrictions
-  isSuspended     Boolean   @default(false) // If below 3.8
+  isSuspended     Boolean   @default(false)
   suspendedReason String?
   suspendedAt     DateTime?
+  
+  // Central government suspension
+  centralSuspension     Boolean   @default(false)
+  centralSuspensionReason String?
+  centralSuspendedAt    DateTime?
+  centralSuspendedBy    String?
 
   lastUpdated DateTime @default(now())
   createdAt   DateTime @default(now())
@@ -501,17 +1155,15 @@ model NIDVerification {
 
   nidNumber    String @unique
   fullName     String
-  dob          String // Date of birth
-  district     String // Nepal district
+  dob          String
+  district     String
   municipality String
   wardNumber   Int
 
-  // Verification status
   verified   Boolean   @default(false)
   verifiedAt DateTime?
   verifiedBy String?
 
-  // Document photo
   nidPhotoUrl String?
 
   createdAt DateTime @default(now())
@@ -526,17 +1178,22 @@ model ActivityLog {
   userId String
   user   User   @relation(fields: [userId], references: [id])
 
-  action   String // e.g., "PAYMENT_REQUESTED", "PLAN_SUBMITTED"
-  entity   String // e.g., "CONTRACT", "PAYMENT"
+  action   String
+  entity   String
   entityId String
-  details  String? // JSON details
+  details  String?
 
   ipAddress String?
   userAgent String?
+  
+  // For central government audit trail
+  ministry String?
+  level    String? // LOCAL, PROVINCIAL, CENTRAL
 
   createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([entityId])
   @@index([createdAt])
+  @@index([level])
 }
