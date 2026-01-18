@@ -287,50 +287,63 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">Total Paid</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">Rs. {stats.totalPaid.toLocaleString()}</div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">By government</p>
-                </CardContent>
-              </Card>
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+  {/* Total Paid Card - Enhanced */}
+  <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 p-6 text-white shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-1 cursor-pointer">
+    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
+    <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full -ml-12 -mb-12"></div>
+    <DollarSign className="h-10 w-10 mb-3 opacity-90" />
+    <div className="text-3xl font-bold mb-1">Rs. {stats.totalPaid.toLocaleString()}</div>
+    <div className="text-green-100 text-sm font-medium">Total Paid</div>
+    <p className="text-xs text-green-200 mt-2">By government to contractors</p>
+    <div className="mt-3 flex items-center text-xs text-green-100">
+      <div className="h-1 w-12 bg-green-300 rounded-full mr-2"></div>
+      <span>Transparent tracking</span>
+    </div>
+  </div>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
-                  <Clock className="h-4 w-4 text-amber-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{payments.filter((p: any) => p.status === 'PENDING').length}</div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Awaiting approval</p>
-                </CardContent>
-              </Card>
+  {/* Pending Payments Card - Enhanced */}
+  <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 p-6 text-white shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-1 cursor-pointer">
+    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
+    <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full -ml-12 -mb-12"></div>
+    <Clock className="h-10 w-10 mb-3 opacity-90" />
+    <div className="text-3xl font-bold mb-1">{payments.filter((p: any) => p.status === 'PENDING').length}</div>
+    <div className="text-amber-100 text-sm font-medium">Pending Payments</div>
+    <p className="text-xs text-amber-200 mt-2">Awaiting government approval</p>
+    <div className="mt-3 flex items-center text-xs text-amber-100">
+      <Clock className="h-3 w-3 mr-1 animate-pulse" />
+      <span>In review process</span>
+    </div>
+  </div>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">Work Reports</CardTitle>
-                  <FileText className="h-4 w-4 text-cyan-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats.totalReports}</div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">From contractors</p>
-                </CardContent>
-              </Card>
+  {/* Work Reports Card - Enhanced */}
+  <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-600 p-6 text-white shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-1 cursor-pointer">
+    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
+    <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full -ml-12 -mb-12"></div>
+    <FileText className="h-10 w-10 mb-3 opacity-90" />
+    <div className="text-3xl font-bold mb-1">{stats.totalReports}</div>
+    <div className="text-blue-100 text-sm font-medium">Work Reports</div>
+    <p className="text-xs text-blue-200 mt-2">Submitted by contractors</p>
+    <div className="mt-3 flex items-center text-xs text-blue-100">
+      <CheckCircle className="h-3 w-3 mr-1" />
+      <span>Public transparency</span>
+    </div>
+  </div>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">Daily Plans</CardTitle>
-                  <FileText className="h-4 w-4 text-cyan-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats.totalPlans}</div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Contractor plans</p>
-                </CardContent>
-              </Card>
-            </div>
+  {/* Daily Plans Card - Enhanced */}
+  <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 p-6 text-white shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-1 cursor-pointer">
+    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
+    <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full -ml-12 -mb-12"></div>
+    <FileText className="h-10 w-10 mb-3 opacity-90" />
+    <div className="text-3xl font-bold mb-1">{stats.totalPlans}</div>
+    <div className="text-purple-100 text-sm font-medium">Daily Plans</div>
+    <p className="text-xs text-purple-200 mt-2">Contractor work plans</p>
+    <div className="mt-3 flex items-center text-xs text-purple-100">
+      <Users className="h-3 w-3 mr-1" />
+      <span>Active monitoring</span>
+    </div>
+  </div>
+</div>
 
             <Tabs defaultValue="reports" className="space-y-6">
               <TabsList className="grid w-full grid-cols-5 lg:w-auto">
